@@ -149,12 +149,15 @@ final class SyncQueue {
 	/**
 	 * Record a failure, compute next_attempt_at via exponential backoff, and
 	 * promote to 'dead' when max_attempts is reached.
+	 *
+	 * @return bool True when the row has just transitioned into 'dead' state
+	 *              (caller typically emits sync_queue.dead to raise an HITL).
 	 */
-	public function mark_failed( int $id, string $error ): void {
+	public function mark_failed( int $id, string $error ): bool {
 		global $wpdb;
 		$row = $wpdb->get_row( $wpdb->prepare( "SELECT attempts, max_attempts FROM {$this->table} WHERE id = %d", $id ), ARRAY_A );
 		if ( empty( $row ) ) {
-			return;
+			return false;
 		}
 
 		$attempts = (int) $row['attempts'] + 1;
@@ -177,6 +180,8 @@ final class SyncQueue {
 			array( '%s', '%d', '%s', '%s', '%s' ),
 			array( '%d' )
 		);
+
+		return $is_dead;
 	}
 
 	/**

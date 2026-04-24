@@ -40,8 +40,25 @@ final class QueueProcessor {
 				$this->process_one( $job );
 				$processed++;
 			} catch ( \Throwable $e ) {
-				$this->queue->mark_failed( (int) $job['id'], $e->getMessage() );
+				$became_dead = $this->queue->mark_failed( (int) $job['id'], $e->getMessage() );
 				$this->emit_failure_event( $job, $e );
+
+				if ( $became_dead ) {
+					// Promote to L2 — this event carries hitl=amber in the registry,
+					// so HitlListener will enqueue an approval without the processor
+					// needing to know about HITL.
+					do_action(
+						'wc_ops_emit',
+						'sync_queue.dead',
+						array(
+							'entity_type' => (string) $job['entity_type'],
+							'entity_id'   => (int) $job['entity_id'],
+							'action'      => (string) $job['action'],
+							'last_error'  => $e->getMessage(),
+						),
+						(string) $job['correlation_id']
+					);
+				}
 			}
 		}
 
