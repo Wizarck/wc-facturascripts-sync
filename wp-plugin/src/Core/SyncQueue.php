@@ -93,6 +93,9 @@ final class SyncQueue {
 		$now = current_time( 'mysql', true );
 
 		$wpdb->query( 'START TRANSACTION' );
+		// SKIP LOCKED (MySQL 8.0+ / MariaDB 10.6+) lets concurrent workers
+		// grab different rows instead of blocking on one another for up to
+		// innodb_lock_wait_timeout (default 50s).
 		$rows = $wpdb->get_results(
 			$wpdb->prepare(
 				"SELECT * FROM {$this->table}
@@ -100,7 +103,7 @@ final class SyncQueue {
 				   AND next_attempt_at <= %s
 				 ORDER BY id ASC
 				 LIMIT %d
-				 FOR UPDATE",
+				 FOR UPDATE SKIP LOCKED",
 				$now,
 				$limit
 			),
