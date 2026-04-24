@@ -87,6 +87,31 @@ final class HmacVerifierTest extends TestCase {
 		$this->assertSame( 'missing_headers', $result['reason'] );
 	}
 
+	/**
+	 * Regression: WP_REST_Request::get_headers() normalizes header names to
+	 * lowercase with underscores (x-wc-fs-timestamp → x_wc_fs_timestamp).
+	 * Verifier MUST accept both forms or the entire FS→WP loop is broken.
+	 */
+	public function test_underscore_header_keys_accepted(): void {
+		$ts             = (string) time();
+		$correlation_id = '018f4a3b-00ff-7abc-8def-feedbeeff00d';
+		$body           = '{"event_id":"albaran.fs.created"}';
+		$signature      = 'sha256=' . hash_hmac( 'sha256', $ts . "\n" . $correlation_id . "\n" . $body, self::SECRET );
+
+		$verifier = new HmacVerifier( self::SECRET );
+		$result   = $verifier->verify(
+			array(
+				'x_wc_fs_timestamp'      => $ts,
+				'x_wc_fs_correlation_id' => $correlation_id,
+				'x_wc_fs_signature'      => $signature,
+			),
+			$body
+		);
+
+		$this->assertTrue( $result['ok'], 'Underscore-normalized headers (WP REST style) must verify' );
+		$this->assertSame( $correlation_id, $result['correlation_id'] );
+	}
+
 	public function test_empty_secret_rejected(): void {
 		$ts = (string) time();
 		$verifier = new HmacVerifier( '' );

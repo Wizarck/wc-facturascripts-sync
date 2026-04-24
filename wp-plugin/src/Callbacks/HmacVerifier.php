@@ -27,14 +27,24 @@ final class HmacVerifier {
 	 * @return array{ok:bool, reason?:string, correlation_id?:string}
 	 */
 	public function verify( array $headers, string $body ): array {
+		// WP_REST_Request::get_headers() normalizes dashes to underscores
+		// (x-wc-fs-timestamp → x_wc_fs_timestamp). Raw PHP server handlers
+		// may return them in HTTP_X_WC_FS_* form. Build a lookup tolerant
+		// to every variant we might see.
 		$lookup = array();
 		foreach ( $headers as $k => $v ) {
-			$lookup[ strtolower( (string) $k ) ] = (string) $v;
+			$key            = strtolower( (string) $k );
+			$key_underscore = str_replace( '-', '_', $key );
+			$key_dash       = str_replace( '_', '-', $key );
+			$value          = is_array( $v ) ? (string) reset( $v ) : (string) $v;
+			$lookup[ $key ]            = $value;
+			$lookup[ $key_underscore ] = $value;
+			$lookup[ $key_dash ]       = $value;
 		}
 
-		$timestamp      = $lookup['x-wc-fs-timestamp']      ?? '';
-		$correlation_id = $lookup['x-wc-fs-correlation-id'] ?? '';
-		$signature      = $lookup['x-wc-fs-signature']      ?? '';
+		$timestamp      = $lookup['x-wc-fs-timestamp']      ?? $lookup['x_wc_fs_timestamp']      ?? '';
+		$correlation_id = $lookup['x-wc-fs-correlation-id'] ?? $lookup['x_wc_fs_correlation_id'] ?? '';
+		$signature      = $lookup['x-wc-fs-signature']      ?? $lookup['x_wc_fs_signature']      ?? '';
 
 		if ( '' === $timestamp || '' === $correlation_id || '' === $signature ) {
 			return array( 'ok' => false, 'reason' => 'missing_headers' );

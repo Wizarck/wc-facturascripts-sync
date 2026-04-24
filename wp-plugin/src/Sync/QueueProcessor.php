@@ -32,6 +32,10 @@ final class QueueProcessor {
 	) {}
 
 	public function drain( int $limit = 20 ): int {
+		// Self-heal stale in_progress rows (crashed workers) before reserving
+		// fresh work — cheap UPDATE that noop's on healthy queues.
+		$this->queue->reclaim_stale();
+
 		$jobs      = $this->queue->reserve( $limit );
 		$processed = 0;
 

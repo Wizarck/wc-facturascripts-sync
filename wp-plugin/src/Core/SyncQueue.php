@@ -185,6 +185,30 @@ final class SyncQueue {
 	}
 
 	/**
+	 * Watchdog: reclaim rows stuck in 'in_progress' longer than $stale_seconds.
+	 *
+	 * A worker that crashes (OOM, kill -9, container restart, PHP fatal)
+	 * between reserve() and mark_done()/mark_failed() leaves its rows in
+	 * 'in_progress' forever — the ORDINARY reserve query ignores that state.
+	 * Call this from the QueueProcessor or a WP-Cron event to self-heal.
+	 *
+	 * @return int Number of rows moved back to 'retry'.
+	 */
+	public function reclaim_stale( int $stale_seconds = 900 ): int {
+		global $wpdb;
+		$cutoff = gmdate( 'Y-m-d H:i:s', time() - $stale_seconds );
+		return (int) $wpdb->query(
+			$wpdb->prepare(
+				"UPDATE {$this->table}
+				 SET status = 'retry', updated_at = %s
+				 WHERE status = 'in_progress' AND updated_at < %s",
+				current_time( 'mysql', true ),
+				$cutoff
+			)
+		);
+	}
+
+	/**
 	 * Generate correlation id — prefers UUIDv7 for lexicographic time order.
 	 */
 	private function generate_correlation_id(): string {
