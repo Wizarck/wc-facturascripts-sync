@@ -131,7 +131,7 @@ final class QueueProcessor {
 
 		$numero = (string) ( $response['numero'] ?? '' );
 		if ( '' !== $numero ) {
-			WooCommerceOrderAdapter::set_fs_albaran( $order, $numero );
+			WooCommerceOrderAdapter::set_fs_albaran( $order, $numero, $fs_id ?: null );
 		}
 
 		return $fs_id;
@@ -163,7 +163,7 @@ final class QueueProcessor {
 		$numero  = (string) ( $response['numero'] ?? '' );
 		$pdf_url = isset( $response['pdf_url'] ) ? (string) $response['pdf_url'] : null;
 		if ( '' !== $numero ) {
-			WooCommerceOrderAdapter::set_fs_invoice( $order, $numero, $pdf_url );
+			WooCommerceOrderAdapter::set_fs_invoice( $order, $numero, $fs_id ?: null, $pdf_url );
 		}
 
 		return $fs_id;

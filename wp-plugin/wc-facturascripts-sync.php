@@ -34,7 +34,14 @@ add_action(
 	}
 );
 
-// Version guards — refuse to activate if dependencies out of range.
+// Composer autoload (PSR-4: WcFacturascriptsSync\ → src/).
+if ( file_exists( WC_FS_SYNC_PATH . 'vendor/autoload.php' ) ) {
+	require_once WC_FS_SYNC_PATH . 'vendor/autoload.php';
+}
+
+// Activation hooks MUST be registered at plugin file load, not from a hooked
+// callback — otherwise WP has already fired `activate_*` before Plugin::boot()
+// runs. Keep version guards + schema installer here.
 register_activation_hook(
 	__FILE__,
 	function () {
@@ -51,13 +58,12 @@ register_activation_hook(
 				)
 			);
 		}
+
+		if ( class_exists( '\WcFacturascriptsSync\Core\Schema' ) ) {
+			\WcFacturascriptsSync\Core\Schema::install();
+		}
 	}
 );
-
-// Composer autoload (PSR-4: WcFacturascriptsSync\ → src/).
-if ( file_exists( WC_FS_SYNC_PATH . 'vendor/autoload.php' ) ) {
-	require_once WC_FS_SYNC_PATH . 'vendor/autoload.php';
-}
 
 // Bootstrap plugin on plugins_loaded priority 20 (after WooCommerce).
 add_action(

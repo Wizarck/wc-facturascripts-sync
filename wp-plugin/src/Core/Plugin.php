@@ -42,8 +42,11 @@ final class Plugin {
 	 * Boot hooks. Idempotent.
 	 */
 	public function boot(): void {
-		// Activation path wires schema creation.
-		register_activation_hook( WC_FS_SYNC_PATH . 'wc-facturascripts-sync.php', array( Schema::class, 'install' ) );
+		// Self-heal schema on every boot (idempotent: bails immediately when
+		// already at the current version). Belt-and-suspenders for the case
+		// where the plugin was upgraded without an explicit reactivation and
+		// SCHEMA_VERSION bumped.
+		Schema::install();
 
 		$config = $this->resolve_config();
 

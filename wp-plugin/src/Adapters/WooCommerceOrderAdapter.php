@@ -34,13 +34,21 @@ final class WooCommerceOrderAdapter {
 		return $id > 0 ? $id : null;
 	}
 
-	public static function set_fs_albaran( \WC_Order $order, string $numero ): void {
+	public static function set_fs_albaran( \WC_Order $order, string $numero, ?int $fs_id = null ): void {
 		$order->update_meta_data( '_wc_fs_sync_albaran_numero', $numero );
+		if ( null !== $fs_id && $fs_id > 0 ) {
+			$order->update_meta_data( '_wc_fs_sync_albaran_id', $fs_id );
+		}
 		$order->save();
 	}
 
-	public static function set_fs_invoice( \WC_Order $order, string $numero, ?string $pdf_url = null ): void {
+	public static function set_fs_invoice( \WC_Order $order, string $numero, ?int $fs_id = null, ?string $pdf_url = null ): void {
 		$order->update_meta_data( '_wc_fs_sync_invoice_numero', $numero );
+		if ( null !== $fs_id && $fs_id > 0 ) {
+			// Persisted so downstream lookups (e.g. norma43 reconcile hit by
+			// idfactura) can resolve the WC order.
+			$order->update_meta_data( '_wc_fs_sync_invoice_id', $fs_id );
+		}
 		if ( $pdf_url ) {
 			$order->update_meta_data( '_wc_fs_sync_invoice_pdf_url', $pdf_url );
 		}

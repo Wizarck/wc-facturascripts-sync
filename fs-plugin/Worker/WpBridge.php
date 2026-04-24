@@ -32,12 +32,15 @@ final class WpBridge
      */
     public static function send(string $event_id, string $correlation_id, array $payload): bool
     {
-        $endpoint = self::config('WP_ENDPOINT');
+        // Keys are read from <fs-root>/MyFiles/secrets.ini, populated by
+        // scripts/sops-to-env.sh fs (from eligia-core SOPS). Names intentionally
+        // aligned with the WC_FS_BRIDGE_* prefix used across the project.
+        $endpoint = self::config('WC_FS_BRIDGE_WP_CALLBACK_URL');
         $secret   = self::config('WC_FS_BRIDGE_HMAC_SECRET');
         $bearer   = self::config('WC_FS_BRIDGE_HEALTH_TOKEN');
 
         if ('' === $endpoint || '' === $secret) {
-            ToolBox::log()->warning('wc-facturascripts-sync: missing WP_ENDPOINT or HMAC secret in MyFiles/secrets.ini');
+            ToolBox::log()->warning('wc-facturascripts-sync: missing WC_FS_BRIDGE_WP_CALLBACK_URL or WC_FS_BRIDGE_HMAC_SECRET in MyFiles/secrets.ini');
             return false;
         }
 

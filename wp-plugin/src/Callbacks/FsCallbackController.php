@@ -96,7 +96,11 @@ final class FsCallbackController {
 		switch ( $event_id ) {
 			case 'albaran.fs.created':
 				if ( $order instanceof \WC_Order ) {
-					WooCommerceOrderAdapter::set_fs_albaran( $order, (string) ( $payload['numero'] ?? '' ) );
+					WooCommerceOrderAdapter::set_fs_albaran(
+						$order,
+						(string) ( $payload['numero'] ?? '' ),
+						isset( $payload['fs_id'] ) ? (int) $payload['fs_id'] : null
+					);
 				}
 				break;
 
@@ -105,6 +109,7 @@ final class FsCallbackController {
 					WooCommerceOrderAdapter::set_fs_invoice(
 						$order,
 						(string) ( $payload['numero'] ?? '' ),
+						isset( $payload['fs_id'] ) ? (int) $payload['fs_id'] : null,
 						isset( $payload['pdf_url'] ) ? (string) $payload['pdf_url'] : null
 					);
 				}
