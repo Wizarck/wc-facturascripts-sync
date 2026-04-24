@@ -51,12 +51,19 @@ All configuration via WordPress filters. Zero settings pages for the sync logic 
 
 ```php
 // Example: set FS API endpoint
-add_filter( 'wc_fs_bridge_api_base_url', fn() => 'https://erp.example.com/api/3' );
+add_filter( 'wc_fs_sync_base_url', fn() => 'https://erp.example.com/api/3' );
 
-// Example: set VAT default by product category
-add_filter( 'wc_fs_bridge_vat_default_by_category', fn() => [
-    'pan' => 4, 'bolleria' => 10, 'default' => 21,
-] );
+// Example: per-line VAT resolver by product category
+add_filter( 'wc_fs_sync_line_vat_rate', function ( $default, $order, $item ) {
+    $map = [ 'pan' => 4, 'bolleria' => 10 ];
+    $slugs = wp_get_post_terms( $item->get_product()->get_id(), 'product_cat', [ 'fields' => 'slugs' ] );
+    foreach ( (array) $slugs as $s ) {
+        if ( isset( $map[ $s ] ) ) {
+            return (float) $map[ $s ];
+        }
+    }
+    return $default;
+}, 10, 3 );
 ```
 
 See [shared/docs/filters.md](./shared/docs/filters.md) for the full list.
