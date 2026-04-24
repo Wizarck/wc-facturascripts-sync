@@ -7,6 +7,8 @@
 
 namespace WcFacturascriptsSync\Core;
 
+use WcFacturascriptsSync\Callbacks\FsCallbackController;
+use WcFacturascriptsSync\Callbacks\HmacVerifier;
 use WcFacturascriptsSync\Sync\QueueProcessor;
 use WcFacturascriptsSync\Sync\CustomerSyncManager;
 use WcFacturascriptsSync\Sync\OrderSyncManager;
@@ -52,6 +54,17 @@ final class Plugin {
 
 		$this->customer->register_hooks();
 		$this->order->register_hooks();
+
+		// Inbound callbacks from FS → WP.
+		$hmac_secret = defined( 'WC_FS_BRIDGE_HMAC_SECRET' ) ? WC_FS_BRIDGE_HMAC_SECRET : (string) get_option( 'wc_fs_sync_hmac_secret', '' );
+		$verifier    = new HmacVerifier( (string) apply_filters( 'wc_fs_sync_hmac_secret', $hmac_secret ) );
+		( new FsCallbackController( $verifier ) )->register_hooks();
+
+		// Daily cron: prune dedupe rows older than 48h.
+		add_action( 'wc_fs_sync_prune_dedupe', array( Schema::class, 'prune_dedupe' ) );
+		if ( ! wp_next_scheduled( 'wc_fs_sync_prune_dedupe' ) ) {
+			wp_schedule_event( time() + 3600, 'daily', 'wc_fs_sync_prune_dedupe' );
+		}
 
 		// WP-CLI command registration (processor runs from system cron).
 		if ( defined( 'WP_CLI' ) && WP_CLI ) {

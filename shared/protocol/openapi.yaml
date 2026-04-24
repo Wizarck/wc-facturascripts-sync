@@ -1,0 +1,114 @@
+openapi: 3.0.3
+info:
+  title: wc-facturascripts-sync protocol
+  version: 0.1.0
+  description: |
+    Bidirectional contract between the WordPress plugin and the FacturaScripts
+    plugin of wc-facturascripts-sync.
+
+    The WP plugin talks to FS via the FS core /api/3 (documented by FacturaScripts
+    upstream). Only the FS→WP callback endpoint is defined here; it is the one
+    piece of protocol both sides own.
+
+servers:
+  - url: https://{store}/wp-json/wc-fs-sync/v1
+    variables:
+      store:
+        default: example.com
+
+security:
+  - hmacSignature: []
+
+paths:
+  /callback:
+    post:
+      summary: Receive a FS → WP notification
+      description: |
+        Called by the fs-plugin Worker/CallbackQueue when a FacturaScripts
+        model transition occurs. Idempotent on (correlation_id, event_id).
+      parameters:
+        - $ref: '#/components/parameters/Timestamp'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/Signature'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CallbackEnvelope'
+      responses:
+        '200':
+          description: Accepted (including dedupe replays)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  dedup:
+                    type: boolean
+        '400':
+          description: Invalid request body
+        '401':
+          description: HMAC verification failed (missing headers, replay, or signature mismatch)
+
+components:
+  securitySchemes:
+    hmacSignature:
+      type: apiKey
+      in: header
+      name: X-WC-FS-Signature
+      description: See shared/protocol/hmac-spec.md
+
+  parameters:
+    Timestamp:
+      name: X-WC-FS-Timestamp
+      in: header
+      required: true
+      schema:
+        type: string
+      description: Unix epoch seconds. Rejected if drift > 300s.
+    CorrelationId:
+      name: X-WC-FS-Correlation-Id
+      in: header
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: UUIDv7 propagated end-to-end.
+    Signature:
+      name: X-WC-FS-Signature
+      in: header
+      required: true
+      schema:
+        type: string
+      description: 'sha256=<HMAC-SHA256(secret, timestamp + "\n" + correlation_id + "\n" + body)>'
+
+  schemas:
+    CallbackEnvelope:
+      type: object
+      required: [event_id, correlation_id, emitted_at, payload]
+      properties:
+        event_id:
+          type: string
+          enum:
+            - albaran.fs.created
+            - invoice.fs.created
+            - invoice.fs.failed
+            - verifactu.aeat.ack
+            - verifactu.aeat.rejected
+            - bank.norma43.reconcile.hit
+            - bank.norma43.reconcile.ambiguous
+            - sepa.remesa.sent
+            - sepa.remesa.rejected_by_bank
+        correlation_id:
+          type: string
+          format: uuid
+        emitted_at:
+          type: string
+          format: date-time
+        payload:
+          type: object
+          description: Event-specific payload. Shape varies per event_id.
+          additionalProperties: true

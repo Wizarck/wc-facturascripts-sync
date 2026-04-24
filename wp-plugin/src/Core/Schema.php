@@ -19,10 +19,10 @@ defined( 'ABSPATH' ) || exit;
 final class Schema {
 
 	public const OPTION_KEY    = 'wc_fs_sync_schema_version';
-	public const SCHEMA_VERSION = '1.0.0';
+	public const SCHEMA_VERSION = '1.1.0';
 
 	/**
-	 * Activation entry point.
+	 * Activation entry point. Also callable on plugins_loaded as a self-heal.
 	 */
 	public static function install(): void {
 		$installed = (string) get_option( self::OPTION_KEY, '' );
@@ -31,10 +31,11 @@ final class Schema {
 		}
 
 		global $wpdb;
-		$table           = $wpdb->prefix . 'wc_fs_sync_queue';
 		$charset_collate = $wpdb->get_charset_collate();
+		$queue           = $wpdb->prefix . 'wc_fs_sync_queue';
+		$dedupe          = $wpdb->prefix . 'wc_fs_sync_dedupe';
 
-		$sql = "CREATE TABLE {$table} (
+		$sql_queue = "CREATE TABLE {$queue} (
 			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
 			correlation_id CHAR(36) NOT NULL,
 			entity_type VARCHAR(32) NOT NULL,
@@ -55,9 +56,30 @@ final class Schema {
 			KEY idx_entity (entity_type, entity_id)
 		) {$charset_collate};";
 
+		$sql_dedupe = "CREATE TABLE {$dedupe} (
+			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+			correlation_id CHAR(36) NOT NULL,
+			event_id VARCHAR(64) NOT NULL,
+			processed_at DATETIME NOT NULL,
+			PRIMARY KEY  (id),
+			UNIQUE KEY uq_correlation_event (correlation_id, event_id),
+			KEY idx_processed_at (processed_at)
+		) {$charset_collate};";
+
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
-		dbDelta( $sql );
+		dbDelta( $sql_queue );
+		dbDelta( $sql_dedupe );
 
 		update_option( self::OPTION_KEY, self::SCHEMA_VERSION, false );
+	}
+
+	/**
+	 * Housekeeping: trim dedupe rows older than 48h. Call from a daily cron.
+	 */
+	public static function prune_dedupe(): int {
+		global $wpdb;
+		$table = $wpdb->prefix . 'wc_fs_sync_dedupe';
+		$cut   = gmdate( 'Y-m-d H:i:s', time() - 48 * 3600 );
+		return (int) $wpdb->query( $wpdb->prepare( "DELETE FROM {$table} WHERE processed_at < %s", $cut ) );
 	}
 }
