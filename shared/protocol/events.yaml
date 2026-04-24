@@ -61,3 +61,35 @@ events:
     hitl: amber
     timeout_hours: 24
     description: "AEAT rechazó la factura; requiere inspección humana"
+
+  - id: order.invoiced
+    layer: wc
+    severity: info
+    channels: [dashboard, email_customer]
+    auto_action: none
+    hitl: no
+    description: "Pedido marcado facturado; OrderSyncManager enqueues FS invoice job"
+
+  - id: customer.fs.synced
+    layer: wc-facturascripts-sync
+    severity: trace
+    channels: [jsonl]
+    auto_action: none
+    hitl: no
+    description: "Cliente creado o actualizado en FS con fs_customer_id persistido"
+
+  - id: sync_queue.dead
+    layer: wc-facturascripts-sync
+    severity: warn
+    channels: [dashboard, telegram_admin]
+    auto_action: enqueue_paperclip_issue
+    hitl: amber
+    description: "Un job de sync agotó reintentos y quedó en estado dead; requiere HITL"
+
+  - id: invoice.fs.failed
+    layer: wc-facturascripts-sync
+    severity: error
+    channels: [dashboard, telegram_admin, email_admin]
+    auto_action: retry_backoff
+    hitl_on_dead: red
+    description: "Sync de factura a FS falló (impacto fiscal)"
