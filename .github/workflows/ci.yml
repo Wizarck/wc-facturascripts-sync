@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-test:
+    name: PHP ${{ matrix.php }} · wp=${{ matrix.wp }} wc=${{ matrix.wc }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { php: '8.1', wp: '6.6',    wc: '9.0'   }
+          - { php: '8.3', wp: 'latest', wc: 'latest' }
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP ${{ matrix.php }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mbstring, intl, json, xml, dom, curl
+          coverage: none
+          tools: composer:v2
+
+      - name: Syntax lint (wp-plugin)
+        run: find wp-plugin/src wp-plugin/tests -name '*.php' -print0 | xargs -0 -n1 php -l
+
+      - name: Syntax lint (fs-plugin)
+        run: find fs-plugin -name '*.php' -print0 | xargs -0 -n1 php -l
+
+      - name: Composer install (wp-plugin)
+        working-directory: wp-plugin
+        run: composer install --no-progress --prefer-dist --no-interaction
+
+      - name: PHPUnit (wp-plugin/tests/Unit)
+        working-directory: wp-plugin
+        run: vendor/bin/phpunit --testsuite unit
+
+      - name: Validate OpenAPI spec
+        run: |
+          pip install --quiet openapi-spec-validator
+          openapi-spec-validator shared/protocol/openapi.yaml
+
+  events-registry-consistency:
+    name: Events YAML ↔ emit() consistency
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check every do_action('wc_ops_emit', ...) references a declared event id
+        run: |
+          # Extract declared events from the sibling wc-ops-suite (via remote raw) —
+          # in production CI this would use a submodule or a packaged schema.
+          # For now we allow the local shared/protocol/events.yaml list as authoritative.
+          set -eu
+          python3 - <<'PY'
+          import re, sys, pathlib, yaml
+          root = pathlib.Path('.')
+          events_file = root / 'shared' / 'protocol' / 'events.yaml'
+          if not events_file.exists():
+              print('SKIP: events.yaml not present — consistency check pass-through')
+              sys.exit(0)
+          declared = {e['id'] for e in (yaml.safe_load(events_file.read_text()).get('events') or [])}
+          pattern = re.compile(r"wc_ops_emit['\"],?\s*['\"]([a-z0-9_.]+)['\"]")
+          missing = set()
+          for php in root.rglob('*.php'):
+              text = php.read_text(errors='ignore')
+              for m in pattern.finditer(text):
+                  if m.group(1) not in declared:
+                      missing.add((m.group(1), str(php)))
+          if missing:
+              print('❌ Events emitted but not declared:')
+              for eid, f in sorted(missing):
+                  print(f'  - {eid}  ({f})')
+              sys.exit(1)
+          print('✅ All emitted events are declared in events.yaml')
+          PY
