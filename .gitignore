@@ -1,0 +1,18 @@
+vendor/
+node_modules/
+*.log
+.DS_Store
+Thumbs.db
+.env
+.env.local
+.env.*.local
+.phpunit.result.cache
+
+# Build artifacts
+wp-plugin/build/
+fs-plugin/build/
+*.zip
+
+# Coverage
+coverage/
+*.cov

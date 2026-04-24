@@ -1,0 +1,63 @@
+# Base event registry for wc-facturascripts-sync
+# Consumed by wc-ops-suite Emitter; extended by {tenant}-tenant-config/events/*.yaml
+#
+# Each event MUST be emitted through WcOpsSuite\Events\Emitter::emit() (or equivalent).
+# CI guard validates that every emit() call references an event declared here or in an overlay.
+
+events:
+  - id: order.created
+    layer: wc
+    severity: trace
+    channels: [jsonl]
+    auto_action: none
+    hitl: no
+    description: "Pedido creado en WC (cualquier estado inicial)"
+
+  - id: order.delivered
+    layer: wc
+    severity: info
+    channels: [dashboard, email_customer]
+    auto_action: enqueue_albaran_sync
+    hitl: no
+    description: "Pedido marcado como entregado (custom status); dispara sync a FS AlbaranCliente"
+
+  - id: albaran.fs.created
+    layer: wc-facturascripts-sync
+    severity: info
+    channels: [dashboard]
+    auto_action: none
+    hitl: no
+    description: "Albarán creado en FS con número asignado; correlation_id en numero2"
+
+  - id: albaran.fs.failed
+    layer: wc-facturascripts-sync
+    severity: warn
+    channels: [dashboard, telegram_admin]
+    auto_action: retry_backoff
+    hitl_on_dead: amber
+    description: "Sync a FS falló tras reintentos; se abre HITL al agotar cola"
+
+  - id: invoice.fs.created
+    layer: wc-facturascripts-sync
+    severity: info
+    channels: [dashboard, email_customer]
+    auto_action: attach_pdf_to_order
+    hitl: no
+    description: "Factura creada en FS; PDF retornado al pedido WP"
+
+  - id: verifactu.aeat.ack
+    layer: fs-plugin
+    severity: info
+    channels: [dashboard]
+    auto_action: mark_invoice_verifactu_ok
+    hitl: no
+    description: "AEAT acknowledged VeriFactu hash chain submission"
+
+  - id: verifactu.aeat.rejected
+    layer: fs-plugin
+    severity: error
+    channels: [dashboard, telegram_admin, email_admin]
+    auto_action: enqueue_translate_error
+    hitl: amber
+    timeout_hours: 24
+    description: "AEAT rechazó la factura; requiere inspección humana"
